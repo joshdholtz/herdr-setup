@@ -1,0 +1,10 @@
+# --- herdr-setup: add to ~/.zshrc ---
+
+# Paint herdr panes with the theme's pane color. herdr draws panes on the
+# terminal's own background; this sets each pane's background via OSC 11.
+[[ -n "$HERDR_ENV" ]] && printf '\033]11;#1c2030\033\\'
+
+# herdr-automatic-rename: rename the tab as soon as a command starts (tmux-style).
+for _f in ${HOME}/.config/herdr/plugins/github/herdr-automatic-rename-*/shell/hook.zsh(N); do
+  source $_f; break
+done

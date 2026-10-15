@@ -1,0 +1,12 @@
+id = "workstreams"
+name = "Workstreams"
+version = "0.1.0"
+min_herdr_version = "0.9.0"
+description = "Read-only home page per space: linked PRs, agents and notes, with what needs you on top."
+platforms = ["linux", "macos"]
+
+[[actions]]
+id = "open"
+title = "Workstream: open home page"
+contexts = ["workspace"]
+command = ["./ws", "open"]
