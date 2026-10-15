@@ -1,7 +1,8 @@
 #!/bin/bash
-# Launcher: runs the workstreams package with the project's own Python
-# (.venv, built from mise's Python 3 by setup.sh). Never the system or Xcode one.
-DIR="$(cd "$(dirname "$(realpath "$0")")" && pwd)"
+# Launcher: runs the workstreams package with the project's own Python (.venv,
+# built by setup.sh). Works through symlinks such as ~/.local/bin/ws.
+SELF="$(realpath "$0" 2>/dev/null || python3 -c 'import os, sys; print(os.path.realpath(sys.argv[1]))' "$0")"
+DIR="$(cd "$(dirname "$SELF")" && pwd)"
 PY="$DIR/.venv/bin/python"
 if [ ! -x "$PY" ]; then
   echo "ws: run $DIR/setup.sh first" >&2

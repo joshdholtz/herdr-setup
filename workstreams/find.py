@@ -10,20 +10,16 @@ import datetime
 import json
 import os
 import re
+import shutil
 import subprocess
 import threading
 
 from . import core
 
-# Commands go through `rtk proxy` so the RTK hook doesn't compress gh's JSON
-# output (it cut 6 searches down to ~1.7k characters and the agent saw nothing).
-GITHUB_TOOLS = [
-    "Bash(rtk proxy gh search:*)",
-    "Bash(rtk proxy gh pr view:*)",
-    "Bash(rtk proxy gh pr list:*)",
-    "Bash(gh search:*)",
-    "Bash(gh pr view:*)",
-]
+# If rtk (https://github.com/rtk-ai/rtk) is installed, its Claude Code hook
+# compresses gh output and the agent sees almost nothing. `rtk proxy` skips that.
+GH = "rtk proxy gh" if shutil.which("rtk") else "gh"
+GITHUB_TOOLS = [f"Bash({GH} search:*)", f"Bash({GH} pr view:*)", f"Bash({GH} pr list:*)"]
 LINEAR_TOOLS = [
     "mcp__claude_ai_Linear__list_issues",
     "mcp__claude_ai_Linear__get_issue",
@@ -69,20 +65,20 @@ else except a final line DONE.
 
 SOURCES = {
     "GitHub": (GITHUB_TOOLS, """\
-YOUR SOURCE: GitHub pull requests in the org named in the brief (or the default org given below), all repos.
+YOUR SOURCE: GitHub pull requests in the org named in the brief, all repos
+(any org if none is named).
 
 Step 1. the user's own open PRs are listed below. Check every
 one against the brief and print a SUGGEST line for each that belongs. These
 are the most likely matches, so do not skip this step. Repos named in the
 brief are where most work is, not a limit: include matching PRs from any
-repo (for example web or JS SDKs). PRs come in stacks ("1 of 3", "2 of 3"):
+repo (for example a related web or backend repo). PRs come in stacks ("1 of 3", "2 of 3"):
 when one PR of a stack belongs, suggest every PR in that stack.
 {my_prs}
 
-Step 2. the user's older PRs: in ONE Bash call, run 3 to 6 keyword searches
-chained with `;`, each exactly like this (always start with `rtk proxy` so
-the output is not truncated):
-  rtk proxy gh search prs --author @me --state open --owner <org> "<keywords>" --limit 30 --json url,title,state,repository,updatedAt
+Step 2. More of the user's open PRs: in ONE Bash call, run 3 to 6 keyword
+searches chained with `;`, each exactly like this:
+  {gh} search prs --author @me --state open {owner}"<keywords>" --limit 30 --json url,title,state,repository,updatedAt
 Only the user's own OPEN PRs count. Never suggest merged or closed PRs, or PRs by other people.
 
 kind is "pr"; status is open|merged|closed."""),
@@ -101,7 +97,7 @@ or issue (kind "linear") itself. Only PRs authored by the user count. Also sugge
 questions (kind "slack_thread", title = a short summary of the thread). Also run at most 2
 searches for the brief's main keywords. If no channel is linked, suggest the
 channel most clearly about this workstream (kind "slack_channel", title = its
-name like "#paywalls"). For linked channels and threads, also print:
+name like "#checkout-redesign"). For linked channels and threads, also print:
 UPDATE {{"url": "...", "title": "...", "status": "..."}}"""),
 }
 
@@ -127,16 +123,23 @@ def build_prompt(ws, viewer, source):
         linked=linked_summary(data),
         dismissed="\n".join(f"- {d}" for d in data["dismissed"]) or "(none)",
     )
-    extra = {"channels": ", ".join(channels) or "(none linked)", "my_prs": ""}
+    org = brief_org(ws.brief())
+    extra = {"channels": ", ".join(channels) or "(none linked)", "my_prs": "", "gh": GH,
+             "owner": f"--owner {org} " if org else ""}
     if source == "GitHub":
         extra["my_prs"] = my_recent_prs(ws.brief())
     return common + "\n" + SOURCES[source][1].format(**extra)
 
 
-def my_recent_prs(brief, days=90):
-    """the user's PRs in the brief's org, fetched by code so they're never missed."""
+def brief_org(brief):
+    """The brief's "Org:" line, else the default org from settings, else None."""
     m = re.search(r"^Org:\s*([\w.-]+)", brief, re.MULTILINE | re.IGNORECASE)
-    org = m.group(1) if m else core.DEFAULT_ORG
+    return m.group(1) if m else core.DEFAULT_ORG
+
+
+def my_recent_prs(brief, days=90):
+    """Your open PRs (in the brief's org, if any), fetched by code so they're never missed."""
+    org = brief_org(brief)
     since = (datetime.date.today() - datetime.timedelta(days=days)).isoformat()
     out = core.run(
         ["gh", "search", "prs", "--author", "@me", *(["--owner", org] if org else []), "--state", "open",
@@ -234,9 +237,11 @@ def run_source(ws, viewer, source, on_event, model, env):
 def run_find(ws, viewer, on_event, model="sonnet"):
     """Search all sources at once. on_event(kind, text) is called as it goes:
     "activity", "suggest", "update", "done", "error"."""
-    # Your shell sets ANTHROPIC_API_KEY, which turns claude.ai connectors (Linear,
-    # Slack) off. Without it, claude uses your claude.ai login and loads them.
-    env = {k: v for k, v in os.environ.items() if k not in ("ANTHROPIC_API_KEY", "CLAUDECODE")}
+    # If ANTHROPIC_API_KEY is set, claude uses it and turns the claude.ai
+    # connectors (Linear, Slack) off, so it is removed here and claude uses your
+    # claude.ai login. Set WS_FIND_KEEP_API_KEY=1 if you only have an API key.
+    drop = {"CLAUDECODE"} | (set() if os.environ.get("WS_FIND_KEEP_API_KEY") else {"ANTHROPIC_API_KEY"})
+    env = {k: v for k, v in os.environ.items() if k not in drop}
     ws.update(lambda d: d.update(last_find=core.now_iso()))
     counts = {}
 

@@ -9,7 +9,9 @@ import datetime
 import json
 import os
 import re
+import shlex
 import socket
+import sys
 import subprocess
 import threading
 
@@ -33,7 +35,7 @@ def _settings():
 SETTINGS = _settings()
 DEFAULT_ORG = os.environ.get("WS_ORG") or SETTINGS.get("org")
 LINEAR_WORKSPACE = os.environ.get("WS_LINEAR_WORKSPACE") or SETTINGS.get("linear_workspace")
-SLACK_WORKSPACE = os.environ.get("WS_SLACK_WORKSPACE") or SETTINGS.get("slack_workspace", "app")
+SLACK_WORKSPACE = os.environ.get("WS_SLACK_WORKSPACE") or SETTINGS.get("slack_workspace")
 DEFAULT_BRANCHES = {"main", "master", "develop", "HEAD", "trunk"}
 
 
@@ -180,7 +182,8 @@ def classify(text):
     if m := SLACK_CHANNEL_RE.match(text):
         return "slack_channel", m.group(2), {"url": f"https://{m.group(1)}.slack.com/archives/{m.group(2)}"}
     if m := SLACK_CLIENT_RE.search(text):
-        return "slack_channel", m.group(2), {"url": f"https://{SLACK_WORKSPACE}.slack.com/archives/{m.group(2)}"}
+        url = f"https://{SLACK_WORKSPACE}.slack.com/archives/{m.group(2)}" if SLACK_WORKSPACE else m.group(0)
+        return "slack_channel", m.group(2), {"url": url}
     if m := SLACK_NAME_RE.match(text):
         return "slack_channel", "#" + m.group(1), {"name": "#" + m.group(1)}
     return None
@@ -430,7 +433,12 @@ PR_FIELDS = """
 """
 
 
-def fetch_github(refs, lookups):
+def open_url(url):
+    """Open a link in the default browser or app (macOS `open`, else `xdg-open`)."""
+    return run(["open" if sys.platform == "darwin" else "xdg-open", url]) is not None
+
+
+def fetch_github(refs, lookups, timeout=60):
     """Returns (viewer_login, {ref: pr}, [(pane_id, owner, repo, number)]).
 
     Each pr dict gets "awaiting_my_review" (personal or team request)."""
@@ -456,7 +464,7 @@ def fetch_github(refs, lookups):
     query = "query { " + "\n".join(parts) + " }"
     proc = subprocess.run(
         ["gh", "api", "graphql", "-f", f"query={query}"],
-        capture_output=True, text=True, timeout=60, stdin=subprocess.DEVNULL,
+        capture_output=True, text=True, timeout=timeout, stdin=subprocess.DEVNULL,
     )
     # Partial errors (a deleted repo, no access) still return data for the rest.
     try:
@@ -563,5 +571,5 @@ def open_home_tab(workspace_id, ws, launcher):
     if not created:
         return False
     herdr_rpc("tab.move", {"tab_id": created["tab"]["tab_id"], "insert_index": 0})
-    herdr("pane", "run", created["root_pane"]["pane_id"], f"exec {launcher} home")
+    herdr("pane", "run", created["root_pane"]["pane_id"], f"exec {shlex.quote(launcher)} home")
     return True

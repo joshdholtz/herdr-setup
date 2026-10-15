@@ -1,6 +1,6 @@
 """Workstream Home: an interactive Textual TUI for one workstream.
 
-Follows the UX spec (claude.ai artifact "Workstream Home UX", draft 2):
+Design:
 
 - Home shows only linked things, as one list with section labels, and keeps
   itself up to date. The top line answers "does anything need me?".
@@ -229,7 +229,7 @@ class SuggestScreen(Screen):
     @on(ListView.Selected)
     def open_row(self, event):
         if event.item.url:
-            core.run(["open", event.item.url])
+            core.open_url(event.item.url)
         event.stop()
 
 
@@ -689,7 +689,7 @@ class HomeApp(App):
         if tab:
             core.herdr("tab", "focus", tab)
         elif row.url:
-            core.run(["open", row.url])
+            core.open_url(row.url)
         else:
             self.flash("No link for this item yet. Finding suggestions (s, then f) looks it up.")
 

@@ -1,6 +1,6 @@
 onboarding = false
-# herdr configuration (from github.com/joshdholtz/herdr-setup)
-# Backup of the previous file is at config.toml.bak
+# herdr configuration from github.com/joshdholtz/herdr-setup
+# Copying this replaces your config; back yours up first (see README).
 
 # ─── Theme ──────────────────────────────────────────────────────────────
 # Catppuccin Macchiato with a peach accent, layered dark backgrounds and a
@@ -10,18 +10,18 @@ name = "catppuccin"
 auto_switch = false
 
 [theme.custom]
-accent = "#f5a97f"             # peach (ruckus accent)
-panel_bg = "#0f1117"           # ruckus bg: darkest root layer / gutters
-sidebar_bg = "#161925"         # ruckus sidebar_bg
-active_row_bg = "#2e3348"      # ruckus select_bg (macchiato)
+accent = "#f5a97f"             # peach
+panel_bg = "#0f1117"
+sidebar_bg = "#161925"
+active_row_bg = "#2e3348"
 selection_bg = "#414a6b"       # brighter selection
-surface0 = "#1c2030"           # ruckus surface
+surface0 = "#1c2030"
 surface1 = "#2e3348"
-surface_dim = "#3b4058"        # ruckus border
-overlay0 = "#5b6078"           # ruckus idle
-overlay1 = "#6e738d"           # ruckus status_fg
-text = "#cad3f5"               # ruckus bar_active_fg
-subtext0 = "#8f93a2"           # ruckus bar_fg
+surface_dim = "#3b4058"
+overlay0 = "#5b6078"
+overlay1 = "#6e738d"
+text = "#cad3f5"
+subtext0 = "#8f93a2"
 blue = "#8aadf4"               # working
 yellow = "#eed49f"             # waiting
 green = "#a6da95"              # done
@@ -113,7 +113,7 @@ tab_bar_right = [
 ]
 # <<< herdr-radar tab-bar block
 
-accent = "#f5a97f"          # peach, matches ruckus
+accent = "#f5a97f"          # peach
 copy_on_select = true
 # Borders on: focused pane outlined in the accent color, others dim.
 pane_borders = "auto"
@@ -145,7 +145,7 @@ resume_agents_on_restore = true
 
 # ─── Experimental ───────────────────────────────────────────────────────
 [experimental]
-# Native Kitty graphics for the browser plugin (you're on Ghostty).
+# Native Kitty graphics for the browser plugin (Ghostty, Kitty and WezTerm support it).
 kitty_graphics = true
 # Keep pane screen history across server restarts.
 pane_history = true

@@ -1,4 +1,4 @@
-"""ws: a read-only home page for a herdr workstream.
+"""ws: a home page for a herdr workstream (one herdr space = one workstream).
 
   ws home             run the interactive home page (normally in its own tab)
   ws open             open or focus the home tab in the current space
@@ -92,21 +92,22 @@ def cmd_brief(args):
     print(ws.brief_path)
 
 
-def context_markdown(ws, data):
+def context_markdown(ws, data, gh_timeout=60):
     """The workstream as a short markdown page an agent can act on."""
     lines = [f"# Workstream: {ws.name}", "",
              f'This herdr space is the "{ws.name}" workstream. The user linked the items below to it.',
              "GitHub, Linear and Slack are the source of truth; this is the list of what belongs.",
              "Refresh with `ws context`. Link something new with `ws add <link>`.", ""]
     brief = "\n".join(l for l in ws.brief().splitlines() if not l.startswith("# ")).strip()
-    if brief:
+    template = core.BRIEF_TEMPLATE.format(name=ws.name).split("\n", 2)[2].strip()
+    if brief and brief != template:
         lines += ["## Brief", "", brief, ""]
 
     refs = sorted(data["prs"])
     prs, viewer, note = {}, None, ""
     if refs:
         try:
-            viewer, prs, _ = core.fetch_github(refs, [])
+            viewer, prs, _ = core.fetch_github(refs, [], timeout=gh_timeout)
         except Exception as e:
             note = f" (live status unavailable: {e})"
     lines += [f"## Pull requests{note}", ""]
@@ -132,7 +133,8 @@ def context_markdown(ws, data):
         lines += ["## Linear", ""]
         for key, e in linear:
             bits = [key] + [x for x in (e.get("status"), e.get("title")) if x]
-            lines.append(f"- {': '.join([bits[0], ' · '.join(bits[1:])]) if len(bits) > 1 else key}. {e.get('url', '')}")
+            label = f"{bits[0]}: {' · '.join(bits[1:])}" if len(bits) > 1 else key
+            lines.append(f"- {label}" + (f". {e['url']}" if e.get("url") else ""))
         lines.append("")
 
     slack = [("channel", e) for _, e in sorted(data["slack_channels"].items())] + \
@@ -141,7 +143,7 @@ def context_markdown(ws, data):
         lines += ["## Slack", ""]
         for kind, e in slack:
             label = e.get("name") or e.get("title") or kind
-            lines.append(f"- {kind}: {label}. {e.get('url', '')}")
+            lines.append(f"- {kind}: {label}" + (f". {e['url']}" if e.get("url") else ""))
         lines.append("")
 
     if data["suggestions"]:
@@ -156,8 +158,14 @@ def cmd_context(args):
     import json as _json
 
     hook = "--hook" in args
-    workspace_id = os.environ.get("HERDR_WORKSPACE_ID") if hook else core.current_workspace_id()
-    ws = core.workstream_for(workspace_id) if workspace_id else None
+    # Only the pane's own space: falling back to the focused space could hand an
+    # agent outside herdr some other workstream.
+    workspace_id = os.environ.get("HERDR_WORKSPACE_ID")
+    if not workspace_id:
+        if hook:
+            return
+        sys.exit("ws: not inside a herdr pane (HERDR_WORKSPACE_ID is not set)")
+    ws = core.workstream_for(workspace_id)
     if not ws or not os.path.isdir(ws.dir):
         if hook:
             return
@@ -167,7 +175,7 @@ def cmd_context(args):
         print(_json.dumps({"workstream": ws.name, "brief": ws.brief(), **{
             k: data[k] for k in ("prs", "linear", "linear_projects", "slack_channels", "slack_threads")}}, indent=2))
         return
-    text = context_markdown(ws, data)
+    text = context_markdown(ws, data, gh_timeout=8 if hook else 60)
     if hook:
         print(_json.dumps({"hookSpecificOutput": {"hookEventName": "SessionStart", "additionalContext": text}}))
     else:
